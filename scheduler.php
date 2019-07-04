@@ -40,7 +40,10 @@ function get_forecast($redis,$signal) {
         $optimise = MIN;
         // $start = $date->format('Y-m-d\TH:i\Z');
         // $result = json_decode(file_get_contents("https://api.carbonintensity.org.uk/intensity/$start/fw24h"));
-        $result = json_decode($redis->get("demandshaper:carbonintensity"));
+        // $result = json_decode($redis->get("demandshaper:carbonintensity"));
+        
+        if (!$result = http_request("GET","https://emoncms.org/demandshaper/carbonintensity",array())) return false;
+        $result = json_decode($result);
         
         if ($result!=null && isset($result->data)) {
         
@@ -77,7 +80,11 @@ function get_forecast($redis,$signal) {
         $optimise = MIN;
         //$result = json_decode(file_get_contents("https://api.octopus.energy/v1/products/AGILE-18-02-21/electricity-tariffs/E-1R-AGILE-18-02-21-D/standard-unit-rates/"));
         // 1. Fetch Octopus forecast
-        $result = json_decode($redis->get("demandshaper:octopus"));
+        // $result = json_decode($redis->get("demandshaper:octopus"));
+
+        if (!$result = http_request("GET","https://emoncms.org/demandshaper/octopus",array())) return false;
+        $result = json_decode($result);
+        
         $start = $timestamp; // current time
         $td = 0;
         
@@ -134,7 +141,10 @@ function get_forecast($redis,$signal) {
     // -----------------------------------------------------------------------------  
     else if ($signal=="cydynni") {
         $optimise = MAX;
-        $result = json_decode($redis->get("demandshaper:bethesda"));
+        // $result = json_decode($redis->get("demandshaper:bethesda"));
+
+        if (!$result = http_request("GET","https://emoncms.org/demandshaper/bethesda",array())) return false;
+        $result = json_decode($result);
         
         // Validate demand shaper
         if  ($result!=null && isset($result->DATA)) {

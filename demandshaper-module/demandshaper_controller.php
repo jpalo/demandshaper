@@ -28,8 +28,9 @@ function demandshaper_controller()
     include "Modules/demandshaper/demandshaper_model.php";
     $demandshaper = new DemandShaper($mysqli,$redis);
     
-    require_once "Modules/device/device_model.php";
-    $device = new Device($mysqli,$redis);
+    //require_once "Modules/device/device_model.php";
+    //$device = new Device($mysqli,$redis);
+    $device = false;
         
     switch ($route->action)
     {  

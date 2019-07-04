@@ -11,6 +11,7 @@ $menu['tabs'][] = array(
 
 if ($session['read']) {
 
+    /*
     require_once "Modules/demandshaper/demandshaper_model.php";
     $demandshaper = new DemandShaper($mysqli,$redis);
 
@@ -18,11 +19,15 @@ if ($session['read']) {
     $device = new Device($mysqli,$redis);
 
     $devices = $demandshaper->get_list($device,$session['userid']);
+    */
     
+    $remoteaccess = new RemoteAccess($session["username"]);
+    $devices = $remoteaccess->request("demandshaper","list","",array());
+        
     $o=0;
     foreach ($devices as $name=>$d) {
         $menu['sidebar']['demandshaper'][] = array(
-            'icon' => $d["type"],
+            'icon' => $d->type,
             'text' => ucfirst($name),
             'path' => "demandshaper?device=".$name,
             'order'=> $o
