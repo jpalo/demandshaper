@@ -54,7 +54,7 @@ class DemandShaper
         $this->redis->set("demandshaper:schedules",json_encode($schedules));
         
         // remove runtime settings
-        $schedules_to_disk = $schedules;
+        $schedules_to_disk = json_decode(json_encode($schedules));
         foreach ($schedules_to_disk as $device=>$schedule) {
             unset($schedules_to_disk->$device->runtime);
         }
@@ -109,6 +109,8 @@ class DemandShaper
                 $schedules = json_decode($row->schedules);
                 foreach ($schedules as $device=>$schedule) {
                     $schedules->$device->runtime = new stdClass();
+                    $schedules->$device->runtime->timeleft = 0;
+                    $schedules->$device->runtime->periods = array();
                 }
                 $this->redis->set("demandshaper:schedules",json_encode($schedules));
             } else {
@@ -117,6 +119,15 @@ class DemandShaper
         }
         
         if (!$schedules || !is_object($schedules)) $schedules = new stdClass();
+        
+        foreach ($schedules as $device=>$schedule) {
+            if (!isset($schedules->$device->runtime)) {
+                $schedules->$device->runtime = new stdClass();
+                $schedules->$device->runtime->timeleft = 0;
+                $schedules->$device->runtime->periods = array();
+            }
+        }        
+        
         
         return $schedules;
     }

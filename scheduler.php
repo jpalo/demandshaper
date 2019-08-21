@@ -140,11 +140,12 @@ function get_forecast($redis,$signal) {
     // EnergyLocal demand shaper
     // -----------------------------------------------------------------------------  
     else if ($signal=="cydynni") {
-        $optimise = MAX;
-        // $result = json_decode($redis->get("demandshaper:bethesda"));
+    
+        $optimise = MIN;
+        $result = json_decode($redis->get("demandshaper:bethesda"));
 
-        if (!$result = http_request("GET","https://emoncms.org/demandshaper/bethesda",array())) return false;
-        $result = json_decode($result);
+        // if (!$result = http_request("GET","https://emoncms.org/demandshaper/bethesda",array())) return false;
+        // $result = json_decode($result);
         
         // Validate demand shaper
         if  ($result!=null && isset($result->DATA)) {
@@ -167,20 +168,22 @@ function get_forecast($redis,$signal) {
             
             $tmp = array();
             $max = $max += -1*$min;
-            for ($i=0; $i<$len; $i++) $tmp[$i*0.5] = 1.0 - (($EL_signal[$i] + -1*$min) / $max);
+            for ($i=0; $i<$len; $i++) $tmp[$i*0.5] = (($EL_signal[$i] + -1*$min) / $max);
             $EL_signal = $tmp;
             
-            //------------------------
-            
-            for ($i=0; $i<count($EL_signal); $i++) {
+            $value = 0.5;
+            $timestamp = $start_timestamp;
+            for ($i=0; $i<$divisions; $i++) {
 
                 $date->setTimestamp($timestamp);
                 $h = 1*$date->format('H');
                 $m = 1*$date->format('i')/60;
                 $hour = $h + $m;
                 
-                $profile[] = array($timestamp*1000,$EL_signal[$hour],$hour);
-                $timestamp += 1800; 
+                if (isset($EL_signal[$hour])) $value = $EL_signal[$hour];
+                
+                $profile[] = array($timestamp*1000,$value,$hour);
+                $timestamp += $resolution; 
             }
         }
     // -----------------------------------------------------------------------------
@@ -226,11 +229,10 @@ function get_forecast($redis,$signal) {
 // SCHEDULE
 // -------------------------------------------------------------------------------------------------------
 
-function schedule_smart($forecast,$timeleft,$end,$interruptible)
+function schedule_smart($forecast,$timeleft,$end,$interruptible,$resolution)
 {
     $debug = 0;
     
-    $resolution = 1800;
     $resolution_h = $resolution/3600;
     $divisions = round(24*3600/$resolution);
     
@@ -257,6 +259,29 @@ function schedule_smart($forecast,$timeleft,$end,$interruptible)
     if ($end_timestamp<$now) $end_timestamp+=3600*24;
 
     $profile = $forecast->profile;
+
+    // --------------------------------------------------------------------------------
+    // Upsample profile
+    // -------------------------------------------------------------------------------
+    $upsampled = array();            
+    
+    $profile_start = $profile[0][0]*0.001;
+    $profile_end = $profile[count($profile)-1][0]*0.001;
+
+    for ($timestamp=$profile_start; $timestamp<$profile_end; $timestamp+=$resolution) {
+        $i = floor(($timestamp - $profile_start)/1800);
+        if (isset($profile[$i])) {
+            $value = $profile[$i][1];
+            
+            $date->setTimestamp($timestamp);
+            $h = 1*$date->format('H');
+            $m = 1*$date->format('i')/60;
+            $hour = $h + $m;
+            $upsampled[] = array($timestamp*1000,$value,$hour);
+        }
+    }            
+    $profile = $upsampled;
+    // --------------------------------------------------------------------------------
     
     // No half hours allocated yet
     for ($td=0; $td<count($profile); $td++) {
@@ -288,6 +313,8 @@ function schedule_smart($forecast,$timeleft,$end,$interruptible)
                  if (isset($profile[$td+$i])) {
                      if ($profile[$td+$i][0]*0.001>=$end_timestamp) $valid_block = 0;
                      $sum += $profile[$td+$i][1];
+                 } else {
+                     $valid_block = 0;
                  }
              }
              
@@ -317,7 +344,7 @@ function schedule_smart($forecast,$timeleft,$end,$interruptible)
             $tend+=$resolution;
             if ($end_hour>=24) $end_hour -= 24;
             // dont allow to run past end time
-            if ($end_hour==$end) break;
+            if ($tend==$end_timestamp) break;
         }
         
         $periods = array();
@@ -401,39 +428,36 @@ function schedule_smart($forecast,$timeleft,$end,$interruptible)
     }
 }
 
-function schedule_timer($forecast,$start1,$stop1,$start2,$stop2) {
-
+function schedule_timer($forecast,$start1,$stop1,$start2,$stop2,$resolution) {
+    
     $tstart1 = 0; $tstop1 = 0;
     $tstart2 = 0; $tstop2 = 0;
+
+    $profile_start = $forecast->profile[0][0]*0.001;
+    $profile_end = $forecast->profile[count($forecast->profile)-1][0]*0.001;
+
+    $date = new DateTime();
+    $date->setTimezone(new DateTimeZone("Europe/London"));
     
-    for ($td=0; $td<count($forecast->profile); $td++) {
-        $forecast->profile[$td][3] = 0;
+    for ($td=$profile_start; $td<$profile_end; $td+=$resolution) {
+        $date->setTimestamp($td);
+        $h = 1*$date->format('H');
+        $m = 1*$date->format('i')/60;
+        $hour = $h + $m;
+       
+        if ($hour==$start1) $tstart1 = $td;
+        if ($hour==$stop1) $tstop1 = $td;
+        if ($hour==$start2) $tstart2 = $td;
+        if ($hour==$stop2) $tstop2 = $td;
     }
                   
     // For each time division in profile
-    for ($td=0; $td<count($forecast->profile); $td++) {
-
-        if ($start1>$stop1 && ($forecast->profile[$td][2]<$stop1 || $forecast->profile[$td][2]>$start1)) {
-            $forecast->profile[$td][3] = 1;
-        }
-        
-        if ($start1>$stop2 && ($forecast->profile[$td][2]<$stop2 || $forecast->profile[$td][2]>$start2)) {
-            $forecast->profile[$td][3] = 1;
-        }
-                 
-        if ($start1<$stop1 && $forecast->profile[$td][2]>=$start1 && $forecast->profile[$td][2]<$stop1) {
-            $forecast->profile[$td][3] = 1;
-        }
-
-        if ($start2<$stop2 && $forecast->profile[$td][2]>=$start2 && $forecast->profile[$td][2]<$stop2) {
-            $forecast->profile[$td][3] = 1;
-        }         
-        
+    /*for ($td=0; $td<count($forecast->profile); $td++) {
         if ($forecast->profile[$td][2]==$start1) $tstart1 = $forecast->profile[$td][0]*0.001;
         if ($forecast->profile[$td][2]==$stop1) $tstop1 = $forecast->profile[$td][0]*0.001;
         if ($forecast->profile[$td][2]==$start2) $tstart2 = $forecast->profile[$td][0]*0.001;
         if ($forecast->profile[$td][2]==$stop2) $tstop2 = $forecast->profile[$td][0]*0.001;
-    }
+    }*/
 
     if ($tstart1>$tstop1) $tstart1 -= 3600*24;
     if ($tstart2>$tstop2) $tstart2 -= 3600*24;

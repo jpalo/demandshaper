@@ -102,22 +102,28 @@ function demandshaper_controller()
                     $timeleft = $schedule->settings->end_timestamp - $now;
                     if ($schedule->runtime->timeleft>$timeleft) $schedule->runtime->timeleft = $timeleft;
                     
+                    $schedule_log_output = "";
+                    
                     if ($schedule->settings->ctrlmode=="smart") {
                         $forecast = get_forecast($redis,$schedule->settings->signal);
-                        $schedule->runtime->periods = schedule_smart($forecast,$schedule->runtime->timeleft,$schedule->settings->end,$schedule->settings->interruptible);
+                        $schedule->runtime->periods = schedule_smart($forecast,$schedule->runtime->timeleft,$schedule->settings->end,$schedule->settings->interruptible,900);
+                        $schedule_log_output = "smart ".($schedule->runtime->timeleft/3600)." ".$schedule->settings->end;
                         
                     } else if ($schedule->settings->ctrlmode=="timer") {
                         $forecast = get_forecast($redis,$schedule->settings->signal);
                         $schedule->runtime->periods = schedule_timer(
                             $forecast, 
-                            $schedule->settings->timer_start1,$schedule->settings->timer_stop1,$schedule->settings->timer_start2,$schedule->settings->timer_stop2
+                            $schedule->settings->timer_start1,$schedule->settings->timer_stop1,$schedule->settings->timer_start2,$schedule->settings->timer_stop2,
+                            900
                         );
+                        $schedule_log_output = "timer ".$schedule->settings->timer_start1." ".$schedule->settings->timer_stop1." ".$schedule->settings->timer_start2." ".$schedule->settings->timer_stop2;
                     } 
                     
                     if ($save) {
                         $schedules->$device = $schedule;
                         $demandshaper->set($session["userid"],$schedules);
                         $redis->set("demandshaper:trigger",1);
+                        schedule_log("$device schedule started ".$schedule_log_output);
                     }
                     
                     return array("schedule"=>$schedule);
@@ -199,10 +205,15 @@ function demandshaper_controller()
                         if ($result = json_decode($mqtt_request->request("emon/$device/in/state","","emon/$device/out/state"))) {
                             $state->ctrl_mode = $result->ctrlmode;
                             $timer_parts = explode(" ",$result->timer);
-                            $state->timer_start1 = conv_time($timer_parts[0]);
-                            $state->timer_stop1 = conv_time($timer_parts[1]);
-                            $state->timer_start2 = conv_time($timer_parts[2]);
-                            $state->timer_stop2 = conv_time($timer_parts[3]);
+                            
+                            $dateTimeZone = new DateTimeZone("Europe/London");
+                            $date = new DateTime("now", $dateTimeZone);
+                            $timeOffset = $dateTimeZone->getOffset($date) / 3600;
+                            
+                            $state->timer_start1 = conv_time($timer_parts[0]) + $timeOffset;
+                            $state->timer_stop1 = conv_time($timer_parts[1]) + $timeOffset;
+                            $state->timer_start2 = conv_time($timer_parts[2]) + $timeOffset;
+                            $state->timer_stop2 = conv_time($timer_parts[3]) + $timeOffset;
                             $state->voltage_output = $result->vout*1;
                             return $state;
                         } else {
@@ -267,29 +278,59 @@ function demandshaper_controller()
                 $csv_str = http_request("GET","https://dexters-web.de/api/call?fn.name=ovms/export&fn.vehicleid=$vehicleid&fn.carpass=$carpass&fn.format=csv&fn.types=D,S&fn.last=1",array());
                 $csv_lines = explode("\n",$csv_str);
 
-                $headings1 = explode(",",$csv_lines[1]);
-                $data1 = explode(",",$csv_lines[2]);
+                $data = array("soc"=>20);
+                if (count($csv_lines)>6) {
+                    $headings1 = explode(",",$csv_lines[1]);
+                    $data1 = explode(",",$csv_lines[2]);
 
-                $headings2 = explode(",",$csv_lines[4]);
-                $data2 = explode(",",$csv_lines[5]);
+                    $headings2 = explode(",",$csv_lines[4]);
+                    $data2 = explode(",",$csv_lines[5]);
 
-                $data = array();
+                    for ($i=0; $i<count($headings1); $i++) {
+                        if (is_numeric($data1[$i])) $data1[$i] *= 1;
+                        $data[$headings1[$i]] = $data1[$i];
+                    }
 
-                for ($i=0; $i<count($headings1); $i++) {
-                    if (is_numeric($data1[$i])) $data1[$i] *= 1;
-                    $data[$headings1[$i]] = $data1[$i];
-                }
-
-                for ($i=0; $i<count($headings2); $i++) {
-                    if (is_numeric($data2[$i])) $data2[$i] *= 1;
-                    $data[$headings2[$i]] = $data2[$i];
+                    for ($i=0; $i<count($headings2); $i++) {
+                        if (is_numeric($data2[$i])) $data2[$i] *= 1;
+                        $data[$headings2[$i]] = $data2[$i];
+                    }
                 }
 
                 return $data;
             }
         
             break;
-    }
+
+        case "log":
+            if (!$remoteaccess && $session["write"]) {
+                $route->format = "text";
+                
+                $filter = false;
+                if (isset($_GET['filter'])) $filter = $_GET['filter'];
+                if ($filter=="") $filter = false;
+                
+                $last_schedule = false;
+                if (isset($_GET['last'])) $last_schedule = true;
+                                
+                if ($out = file_get_contents("/var/log/emoncms/demandshaper.log")) {
+                    
+                    $lines = explode("\n",$out);
+                    $lines_out = "";
+                    foreach ($lines as $line) {
+                    
+                        if ($filter===false) { 
+                            $lines_out .= $line."\n";
+                        } else if (strpos($line,$filter)!==false) {
+                            if ($last_schedule && strpos($line,"schedule started")!==false) $lines_out = "";
+                            $lines_out .= $line."\n";
+                        } 
+                    }
+                    return $lines_out;
+                }
+            }
+            break;   
+    }   
     
     return array('content'=>'#UNDEFINED#');
 }
@@ -298,4 +339,15 @@ function conv_time($time) {
     $h = floor($time*0.01);
     $m = (($time*0.01) - $h)/0.6;
     return $h+$m;
+}
+
+function schedule_log($message){
+    if ($fh = @fopen("/var/log/emoncms/demandshaper.log","a")) {
+        $now = microtime(true);
+        $micro = sprintf("%03d",($now - ($now >> 0)) * 1000);
+        $now = DateTime::createFromFormat('U', (int)$now); // Only use UTC for logs
+        $now = $now->format("Y-m-d H:i:s").".$micro";
+        @fwrite($fh,$now." | ".$message."\n");
+        @fclose($fh);
+    }
 }
