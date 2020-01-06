@@ -296,7 +296,28 @@ function load_device(device_id, device_name, device_type)
         var date = new Date();
             
         if (schedule.runtime.periods==undefined) schedule.runtime.periods = []
-                      
+        
+        /*
+        if (schedule.runtime.periods && schedule.runtime.periods.length) {
+            
+            var now_hours = (date.getHours() + (date.getMinutes()/60));
+            var period_start = (schedule.runtime.periods[0].start[1]);
+            var startsin = 0;
+            if (now_hours>period_start) {
+               startsin = (24 - now_hours) + period_start
+            } else {
+               startsin = period_start - now_hours
+            }
+            
+            var hour = Math.floor(startsin);
+            var mins = Math.round(60*(startsin-hour));
+            var text = "Starts in "+mins+" mins";
+            if (hour>0) text = "Starts in "+hour+" hrs "+mins+" mins";
+            if (hour>=23 && mins>=30) text = "On";
+            //if (controls["active"].value==0) text = "Off"; 
+            $(".startsin").html(text);
+        }*/
+        
         // Output schedule periods
         var periods = [];
         for (var z in schedule.runtime.periods) {
@@ -525,9 +546,9 @@ function load_device(device_id, device_name, device_type)
             else if (hour==12) str = "Noon";
             else if (h>12) {
                 h = h - 12;
-                str = h+":"+m+" p.m.";
+                str = h+":"+m+" pm";
             } else if (h<12) {
-                str += " a.m.";
+                str += "am";
             }
         }
         return str;

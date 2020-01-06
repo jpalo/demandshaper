@@ -49,8 +49,8 @@ function demandshaper_controller()
         case "forecast":
             $signal = "carbonintensity";
             if (isset($_GET['signal'])) $signal = $_GET['signal'];
-            include "$linked_modules_dir/demandshaper/scheduler.php";                        
-            return get_forecast($redis,$signal,$forecast_list[$signal]["resolution"]);
+            include "$linked_modules_dir/demandshaper/scheduler.php";
+            return get_forecast($redis,$signal);
             break;
         
         case "submit":
@@ -106,8 +106,8 @@ function demandshaper_controller()
                     $schedule_log_output = "";
                     
                     if ($schedule->settings->ctrlmode=="smart") {
-                        $forecast = get_forecast($redis,$schedule->settings->signal,$forecast_list[$schedule->settings->signal]["resolution"]);
-                        $schedule->runtime->periods = schedule_smart($forecast,$schedule->runtime->timeleft,$schedule->settings->end,$schedule->settings->interruptible,900,$schedule->settings->device);
+                        $forecast = get_forecast($redis,$schedule->settings->signal);
+                        $schedule->runtime->periods = schedule_smart($forecast,$schedule->runtime->timeleft,$schedule->settings->end,$schedule->settings->interruptible,900);
                         $schedule_log_output = "smart ".($schedule->runtime->timeleft/3600)." ".$schedule->settings->end;
                         
                     } else if ($schedule->settings->ctrlmode=="timer") {

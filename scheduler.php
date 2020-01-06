@@ -19,8 +19,9 @@ define("MIN",0);
 // FETCH AND PRE-PROCESS FORECASTS AS 24H FROM CURRENT TIME
 // -------------------------------------------------------------------------------------------------------
 
-function get_forecast($redis,$signal,$resolution) {
+function get_forecast($redis,$signal) {
 
+    $resolution = 1800;
     $resolution_h = $resolution/3600;
     $divisions = round(24*3600/$resolution);
 
@@ -94,6 +95,21 @@ function get_forecast($redis,$signal,$resolution) {
         
         // if forecast is valid
         if ($result!=null && isset($result->results)) {
+            /* for each half hour in forecast
+            for ($i=count($result->results)-1; $i>0; $i--) {
+                $datetimestr = $result->results[$i]->valid_from;
+                $price = $result->results[$i]->value_inc_vat;
+                $date = new DateTime($datetimestr);
+                $timestamp = $date->getTimestamp();
+                if ($timestamp>=$start && $td<48) {
+                    $h = 1*$date->format('H');
+                    $m = 1*$date->format('i')/60;
+                    $hour = $h + $m;
+                    if ($timestamp>=$end_timestamp) $available = 0;
+                    if ($timestamp>=$start_timestamp) $profile[] = array($timestamp*1000,$price,$hour,$available,0);
+                    $td++;
+                }
+            }*/
             
             // sort octopus forecast into time => price associative array
             $octopus = array();
@@ -131,13 +147,13 @@ function get_forecast($redis,$signal,$resolution) {
     else if ($signal=="energylocal_bethesda") {
         $optimise = MIN;
         if (!$result = $redis->get("demandshaper:energylocal_bethesda")) {
-            if ($result = http_request("GET","https://dashboard.energylocal.org.uk/cydynni/demandshaper?time=".time(),array())) {
+            if ($result = http_request("GET","https://dashboard.energylocal.org.uk/cydynni/demandshaper&time=".time(),array())) {
                 $redis->set("demandshaper:energylocal_bethesda",$result);
             }
         }
         $result = json_decode($result);
         // Validate demand shaper
-        if  ($result!=null && isset($result->DATA) && count($result->DATA)>0) {
+        if  ($result!=null && isset($result->DATA)) {
             
             $date = new DateTime();
             $date->setTimezone(new DateTimeZone("Europe/London"));
@@ -199,43 +215,6 @@ function get_forecast($redis,$signal,$resolution) {
         }
     }
 
-    // -----------------------------------------------------------------------------
-    // Nordpool Spot FI
-    // ----------------------------------------------------------------------------- 
-    else if ($signal=="nordpool_fi") {
-        $optimise = MIN;
-    
-        if (!$result = $redis->get("demandshaper:nordpool_fi")) {
-            if ($result = http_request("GET","http://tuntihinta.fi/json/hinnat.json",array())) {
-                $redis->set("demandshaper:nordpool_fi",$result);
-            }
-        }
-        $result = json_decode($result);
-         
-        if ($result!=null && isset($result->data)) {
-
-            $timestamp = $start_timestamp;
-            
-            foreach ($result->data as $row) {
-
-                $arrDate = new DateTime($row->timestamp);
-                $arrDate->setTimezone(new DateTimeZone("Europe/London"));                
-                $arrTs = $arrDate->getTimestamp();
-                    
-                if ($arrTs>=$start_timestamp) 
-                {
-                    $h = 1*$arrDate->format('H');
-                    $m = 1*$arrDate->format('i')/60;
-                    $hour = $h + $m;
-                    
-                    $profile[] = array($arrTs*1000,floatval($row->PriceWithVat),$hour);
-                }
-
-                $timestamp += $resolution; 
-            }
-        }
-    }
-
     // get max and min values of profile
     $min = 1000000; $max = -1000000;
     for ($i=0; $i<count($profile); $i++) {
@@ -249,7 +228,6 @@ function get_forecast($redis,$signal,$resolution) {
     $result->optimise = $optimise;
     $result->min = $min;
     $result->max = $max;
-    $result->resolution = $resolution;
     return $result;
 }
 
@@ -257,13 +235,12 @@ function get_forecast($redis,$signal,$resolution) {
 // SCHEDULE
 // -------------------------------------------------------------------------------------------------------
 
-function schedule_smart($forecast,$timeleft,$end,$interruptible,$resolution,$device)
+function schedule_smart($forecast,$timeleft,$end,$interruptible,$resolution)
 {
     $debug = 0;
-    $forecast_length = 24;
-
+    
     $resolution_h = $resolution/3600;
-    $divisions = round($forecast_length*3600/$resolution);
+    $divisions = round(24*3600/$resolution);
     
     // period is in hours
     $period = $timeleft / 3600;
@@ -285,7 +262,7 @@ function schedule_smart($forecast,$timeleft,$end,$interruptible,$resolution,$dev
     $end = floor($end / $resolution_h) * $resolution_h;
     $date->modify("midnight");
     $end_timestamp = $date->getTimestamp() + $end*3600;
-    if ($end_timestamp<$now) $end_timestamp+=3600*$forecast_length;
+    if ($end_timestamp<$now) $end_timestamp+=3600*24;
 
     $profile = $forecast->profile;
 
@@ -298,7 +275,7 @@ function schedule_smart($forecast,$timeleft,$end,$interruptible,$resolution,$dev
     $profile_end = $profile[count($profile)-1][0]*0.001;
 
     for ($timestamp=$profile_start; $timestamp<$profile_end; $timestamp+=$resolution) {
-        $i = floor(($timestamp - $profile_start)/$forecast->resolution);
+        $i = floor(($timestamp - $profile_start)/1800);
         if (isset($profile[$i])) {
             $value = $profile[$i][1];
             
@@ -319,6 +296,7 @@ function schedule_smart($forecast,$timeleft,$end,$interruptible,$resolution,$dev
 
     if (!$interruptible) 
     {
+
         // We are trying to find the start time that results in the maximum sum of the available power
         // $max is used to find the point in the forecast that results in the maximum sum..
         $threshold = 0;
@@ -336,7 +314,7 @@ function schedule_smart($forecast,$timeleft,$end,$interruptible,$resolution,$dev
              // Calculate sum of probability function values for block of demand covering hours in period
              $sum = 0;
              $valid_block = 1;
-             for ($i=0; $i<$period*($divisions/$forecast_length); $i++) {
+             for ($i=0; $i<$period*($divisions/24); $i++) {
                  
                  if (isset($profile[$td+$i])) {
                      if ($profile[$td+$i][0]*0.001>=$end_timestamp) $valid_block = 0;
@@ -360,20 +338,13 @@ function schedule_smart($forecast,$timeleft,$end,$interruptible,$resolution,$dev
         $start_hour = 0;
         $tstart = 0;
         if (isset($profile[$pos])) {
+            $start_hour = $profile[$pos][2];
             $tstart = $profile[$pos][0]*0.001;
-            
-            if($device === "openevse") {
-                $localtime = localtime($tstart);            
-                $start_hour = $localtime[2] + $localtime[1]/60;
-            }
-            else{
-                $start_hour = $profile[$pos][2];
-            }
         }
         $end_hour = $start_hour;
         $tend = $tstart;
         
-        for ($i=0; $i<$period*($divisions/$forecast_length); $i++) {
+        for ($i=0; $i<$period*($divisions/24); $i++) {
             $profile[$pos+$i][3] = 1;
             $end_hour+=$resolution/3600;
             $tend+=$resolution;
@@ -394,7 +365,7 @@ function schedule_smart($forecast,$timeleft,$end,$interruptible,$resolution,$dev
         // ---------------------------------------------------------------------------------
 
         // For each hour of demand
-        for ($p=0; $p<$period*($divisions/$forecast_length); $p++) {
+        for ($p=0; $p<$period*($divisions/24); $p++) {
 
             if ($forecast->optimise==MIN) $threshold = $forecast->max; else $threshold = $forecast->min;
             $pos = -1;
@@ -432,29 +403,15 @@ function schedule_smart($forecast,$timeleft,$end,$interruptible,$resolution,$dev
         
             if ($i==0) {
                 if ($val) {
+                    $start = $hour;
                     $tstart = $timestamp;
-
-                    if($device === "openevse") {
-                        $localtime = localtime($tstart);            
-                        $start = $localtime[2] + $localtime[1]/60;
-                    }
-                    else {
-                        $start = $hour;
-                    }
                 }
                 $last = $val;
             }
             
-            if ($last==0 && $val==1) {                
+            if ($last==0 && $val==1) {
+                $start = $hour;
                 $tstart = $timestamp;
-
-                if($device === "openevse") {
-                    $localtime = localtime($tstart);            
-                    $start = $localtime[2] + $localtime[1]/60;
-                }
-                else {
-                    $start = $hour;
-                }
             }
             
             if ($last==1 && $val==0) {
