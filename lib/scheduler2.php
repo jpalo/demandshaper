@@ -29,7 +29,8 @@ function schedule_block($forecast,$period,$end,$timezone)
 {    
     $profile = $forecast->profile;
     $profile_length = count($profile);
-    
+    $requested_end = $end;
+
     // End time limits
     if ($end<$forecast->start) return array();
     if ($end>$forecast->end) $end = $forecast->end;
@@ -95,6 +96,10 @@ function schedule_block($forecast,$period,$end,$timezone)
         
     $date = new DateTime();
     $date->setTimezone(new DateTimeZone($timezone));
+
+    // if end is set to following day, do not schedule for today
+    if(get_hour($date,$requested_end)<get_hour($date,$start)) return array();
+
     return array(array("start"=>array($start,get_hour($date,$start)), "end"=>array($end,get_hour($date,$end))));
 }
 

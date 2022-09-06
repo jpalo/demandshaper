@@ -102,6 +102,8 @@ function get_forecast_nordpool($redis,$params)
         if (isset($timevalues[$forecast_time])) {
             $value = $timevalues[$forecast_time];
             $last_time_value = $forecast_time;
+        } else if (isset($timevalues[$forecast_time+(3600)])) { // if not available, this may be feed that only shows forecasts starting from next hour
+            $value = $timevalues[$forecast_time+(3600)];
         } else {
             $value = null;
         }
@@ -109,22 +111,22 @@ function get_forecast_nordpool($redis,$params)
         $profile[] = $value == null ? null : 1*$value;
     }
     
-    if($profile[0]=null) {
-        $profile[0]="EMPTY";
-    }
-    if($profile[1]=null) {
-        $profile[1]="EMPTY";
-    }
+    // if($profile[0]=null) {
+    //     $profile[0]="EMPTY";
+    // }
+    // if($profile[1]=null) {
+    //     $profile[1]="EMPTY";
+    // }
 
     // remove empty array items
     $profile = array_filter($profile);
 
-    if($profile[0]="EMPTY") {
-        $profile[0]=null;
-    }
-    if($profile[1]="EMPTY") {
-        $profile[1]=null;
-    }
+    // if($profile[0]="EMPTY") {
+    //     $profile[0]=null;
+    // }
+    // if($profile[1]="EMPTY") {
+    //     $profile[1]=null;
+    // }
 
     // adjust end value accordingly
     $params->end = $last_time_value;
