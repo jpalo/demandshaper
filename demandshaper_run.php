@@ -254,6 +254,11 @@ while(true)
                         }
                             
                         $schedule = json_decode(json_encode($schedule));
+
+                        if($schedule->runtime->periods==[]) {
+                            $schedule->runtime->timeleft=$schedule->settings->period * 3600;
+                        }
+
                         $log->info("  reschedule ".json_encode($schedule->runtime->periods));
                     }
                 }
