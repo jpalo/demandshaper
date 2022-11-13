@@ -119,7 +119,7 @@ function get_forecast_nordpool($redis,$params)
     // }
 
     // remove empty array items
-    $profile = array_filter($profile);
+    $profile = array_filter($profile, 'strlen');
 
     // if($profile[0]="EMPTY") {
     //     $profile[0]=null;
