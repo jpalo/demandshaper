@@ -75,11 +75,9 @@ function get_forecast_nordpool($redis,$params)
             "t"=>time()
         );
         if ($result = http_request("GET","http://datafeed.expektra.se/datafeed.svc/spotprice",$req_params)) {            
-            if(!str_contains($result, "<html>")) {
+            if(strpos($result, "{") === 0) {
                 $redis->set($key,$result);
                 $redis->expire($key,3600);
-            } else {
-                $redis->delete($key);
             }
         }
     }
