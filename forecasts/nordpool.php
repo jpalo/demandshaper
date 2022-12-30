@@ -47,7 +47,7 @@ function get_forecast_nordpool($redis,$params)
         "DK1"=>array("currency"=>"DKK","vat"=>"25"),
         "DK2"=>array("currency"=>"DKK","vat"=>"25"),
         "EE"=>array("currency"=>"EUR","vat"=>"20"),
-        "FI"=>array("currency"=>"EUR","vat"=>"24"),
+        "FI"=>array("currency"=>"EUR","vat"=>"10"),
         "LT"=>array("currency"=>"EUR","vat"=>"21"),
         "NO1"=>array("currency"=>"NOK","vat"=>"25"),
         "NO2"=>array("currency"=>"NOK","vat"=>"25"),
@@ -74,11 +74,16 @@ function get_forecast_nordpool($redis,$params)
             "format"=>"json",
             "t"=>time()
         );
-        if ($result = http_request("GET","http://datafeed.expektra.se/datafeed.svc/spotprice",$req_params)) {
-            $redis->set($key,$result);
-            $redis->expire($key,3600);
+        if ($result = http_request("GET","http://datafeed.expektra.se/datafeed.svc/spotprice",$req_params)) {            
+            if(!str_contains($result, "<html>")) {
+                $redis->set($key,$result);
+                $redis->expire($key,3600);
+            } else {
+                $redis->delete($key);
+            }
         }
     }
+
     $result = json_decode($result);
     
     // 2. Create associative array out of original forecast
