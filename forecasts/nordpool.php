@@ -64,7 +64,10 @@ function get_forecast_nordpool($redis,$params)
 
     // 1. Load forecast from local cache if it exists
     //    otherwise load from nordpool API
-    //    expire cache every 3600 seconds to limit API calls
+    //    expire cache every 7200 seconds to limit API calls
+    //    important that it is 7200 instead of 3600 as Expektra doesn't return history values, so 
+    //    if query for prices is made on the second half of the hour, the price for that second half 
+    //    is not returned
     $key = "demandshaper:nordpool:".$params->area;
     if (!$result = $redis->get($key)) {
         $req_params = array(
