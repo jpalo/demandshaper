@@ -77,7 +77,7 @@ function get_forecast_nordpool($redis,$params)
         if ($result = http_request("GET","http://datafeed.expektra.se/datafeed.svc/spotprice",$req_params)) {            
             if(strpos($result, "{") === 0) {
                 $redis->set($key,$result);
-                $redis->expire($key,3600);
+                $redis->expire($key,7200);
             }
         }
     }
@@ -105,8 +105,8 @@ function get_forecast_nordpool($redis,$params)
         if (isset($timevalues[$forecast_time])) {
             $value = $timevalues[$forecast_time];
             $last_time_value = $forecast_time;
-        } else if (isset($timevalues[$forecast_time+(3600)])) { // if not available, this may be feed that only shows forecasts starting from next hour
-            $value = $timevalues[$forecast_time+(3600)];
+        // } else if (isset($timevalues[$forecast_time+(3600)])) { // if not available, this may be feed that only shows forecasts starting from next hour
+        //     $value = $timevalues[$forecast_time+(3600)];
         } else {
             $value = null;
         }
