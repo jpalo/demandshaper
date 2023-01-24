@@ -64,23 +64,32 @@ function get_forecast_nordpool($redis,$params)
 
     // 1. Load forecast from local cache if it exists
     //    otherwise load from nordpool API
-    //    expire cache every 7200 seconds to limit API calls
-    //    important that it is 7200 instead of 3600 as Expektra doesn't return history values, so 
+    //    expire cache every 3600+1800 seconds to limit API calls
+    //    important that it is 3600+1800 instead of 3600 as Expektra doesn't return history values, so 
     //    if query for prices is made on the second half of the hour, the price for that second half 
     //    is not returned
     $key = "demandshaper:nordpool:".$params->area;
     if (!$result = $redis->get($key)) {
-        $req_params = array(
-            "token"=>$params->signal_token,
-            "bidding_area"=>$params->area,
-            "perspective"=>$nordpool[$params->area]["currency"],
-            "format"=>"json",
-            "t"=>time()
-        );
-        if ($result = http_request("GET","http://datafeed.expektra.se/datafeed.svc/spotprice",$req_params)) {            
-            if(strpos($result, "{") === 0) {
-                $redis->set($key,$result);
-                $redis->expire($key,7200);
+        if($params->area === "FI") {
+            if ($result = http_request("GET","https://api.spot-hinta.fi/TodayAndDayForward?region=FI&HomeAssistant=false",array())) {            
+                if(strpos($result, "{") === 0) {
+                    $redis->set($key,$result);
+                    $redis->expire($key,3600);
+                }
+            }            
+        } else {
+            $req_params = array(
+                "token"=>$params->signal_token,
+                "bidding_area"=>$params->area,
+                "perspective"=>$nordpool[$params->area]["currency"],
+                "format"=>"json",
+                "t"=>time()
+            );
+            if ($result = http_request("GET","http://datafeed.expektra.se/datafeed.svc/spotprice",$req_params)) {            
+                if(strpos($result, "{") === 0) {
+                    $redis->set($key,$result);
+                    $redis->expire($key,3600+1800);
+                }
             }
         }
     }
@@ -91,12 +100,21 @@ function get_forecast_nordpool($redis,$params)
     //    format: timestamp:value
     $timevalues = array();
     if ($result!=null && isset($result->data)) {
-        $vat = (100.0+$nordpool[$params->area]["vat"])/100.0;
-        foreach ($result->data as $row) {
-            $date = new DateTime($row->utc);
-            $date->setTimezone($timezone);
-            $timestamp = $date->getTimestamp();
-            $timevalues[$timestamp] = number_format($row->value*$vat*0.1,3,'.','');
+        if($params->area === "FI") {
+            foreach ($result->data as $row) {
+                $date = new DateTime($row->DateTime);
+                $date->setTimezone($timezone);
+                $timestamp = $date->getTimestamp();
+                $timevalues[$timestamp] = number_format($row->PriceWithTax*100.0,3,'.','');
+            }
+        } else {
+            $vat = (100.0+$nordpool[$params->area]["vat"])/100.0;
+            foreach ($result->data as $row) {
+                $date = new DateTime($row->utc);
+                $date->setTimezone($timezone);
+                $timestamp = $date->getTimestamp();
+                $timevalues[$timestamp] = number_format($row->value*$vat*0.1,3,'.','');
+            }
         }
     }
     

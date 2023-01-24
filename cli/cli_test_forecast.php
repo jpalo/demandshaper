@@ -14,7 +14,7 @@ $redis = new Redis();
 $redis->connect("127.0.0.1");
 
 $params = new stdClass();
-$params->timezone = "Europe/London";
+$params->timezone = "Europe/Helsinki";
 
 // 1. Set desired forecast interval
 // This will downsample or upsample original forecast
@@ -25,7 +25,7 @@ $now = time();
 $params->start = floor($now/$params->interval)*$params->interval;
 $params->end = $params->start + (3600*24);
 // 3. Load forecast
-$signal = "carbonintensity";
+$signal = "nordpool";
 
 // Forecast params
 switch ($signal)
@@ -45,7 +45,7 @@ switch ($signal)
         break;
 
     case "nordpool":
-        $params->area = "DK1";
+        $params->area = "FI";
         $params->signal_token = $nordpool_token;
         break;
 
