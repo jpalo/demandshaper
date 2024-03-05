@@ -176,7 +176,10 @@ while(true)
                     if ($schedule->runtime->timeleft<0) $schedule->runtime->timeleft = 0;
                 } else {
                     $log->info("  status: OFF");
-                    $schedule->runtime->started = false;
+                    // if we're past the scheduled time, if is safe to set started to false and reschedule $schedule->runtime->periods[0]->start[0]
+                    if(isset($schedule->runtime->periods) && $now>$schedule->runtime->periods[0]->start[0]) {
+                        $schedule->runtime->started = false;
+                    }
                     $log->info("  timeleft: ".$schedule->runtime->timeleft."s");
                 }
                 
