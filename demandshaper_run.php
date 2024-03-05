@@ -176,6 +176,7 @@ while(true)
                     if ($schedule->runtime->timeleft<0) $schedule->runtime->timeleft = 0;
                 } else {
                     $log->info("  status: OFF");
+                    $schedule->runtime->started = false;
                     $log->info("  timeleft: ".$schedule->runtime->timeleft."s");
                 }
                 
@@ -318,7 +319,7 @@ while(true)
     try { $mqtt_client->loop(); } catch (Exception $e) { }
     
     // Dont loop to fast
-    usleep(100000);
+    usleep(1000000);
 }
 
 function connect($r, $message) {
