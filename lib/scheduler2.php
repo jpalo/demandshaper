@@ -96,6 +96,12 @@ function schedule_block($forecast,$period,$end,$timezone)
     $date = new DateTime();
     $date->setTimezone(new DateTimeZone($timezone));
     
+     // don't allow charging between 14-16 as Nordpool prices are updated
+    // OR if start is within next hour
+    if((get_hour($date,$start) >= 16-$period/3600 && get_hour($date,$start) < 16)
+    //    || ($start < time()+3600 && $start > time())
+    ) return array(); 
+
     return array(array("start"=>array($start,get_hour($date,$start)), "end"=>array($end,get_hour($date,$end))));
 }
 
