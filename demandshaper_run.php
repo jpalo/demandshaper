@@ -177,9 +177,12 @@ while(true)
                 } else {
                     $log->info("  status: OFF");
                     // if we're past the scheduled time, if is safe to set started to false and reschedule $schedule->runtime->periods[0]->start[0]
+
+                    
                     if(isset($schedule->runtime->periods) 
                         && is_array($schedule->runtime->periods) 
-                        && $now>$schedule->runtime->periods[0]->start[0]) {
+                        && count($schedule->runtime->periods) > 0
+                        && $now>$schedule->runtime->periods[0]->end[0]) {
                         $schedule->runtime->started = false;
                     }
                     $log->info("  timeleft: ".$schedule->runtime->timeleft."s");
@@ -200,11 +203,11 @@ while(true)
                     
                     // Smart or regular timer
                     if ($schedule->settings->ctrlmode=="smart" || $schedule->settings->ctrlmode=="timer") {
-                        if (count($schedule->runtime->periods)) {
+                        // if (count($schedule->runtime->periods)) { // comment this out to allow clearing timer on unallowed times (13-16 for nordpool)
                             $s1 = time_offset($schedule->runtime->periods[$active_period]->start[1],-$timeOffset);
                             $e1 = time_offset($schedule->runtime->periods[$active_period]->end[1],-$timeOffset);
                             $device_class[$device_type]->timer($device,$s1,$e1,$s2,$e2);
-                        }
+                        // }
                     }
                     else if ($schedule->settings->ctrlmode=="on") $device_class[$device_type]->on($device);
                     else if ($schedule->settings->ctrlmode=="off") $device_class[$device_type]->off($device);
