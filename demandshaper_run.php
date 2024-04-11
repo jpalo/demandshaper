@@ -184,6 +184,7 @@ while(true)
                         && count($schedule->runtime->periods) > 0
                         && $now>$schedule->runtime->periods[0]->end[0]) {
                         $schedule->runtime->started = false;
+                        $schedule->runtime->timeleft = $schedule->settings->period * 3600;
                     }
                     $log->info("  timeleft: ".$schedule->runtime->timeleft."s");
                 }
