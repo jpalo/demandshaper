@@ -204,11 +204,11 @@ while(true)
                     
                     // Smart or regular timer
                     if ($schedule->settings->ctrlmode=="smart" || $schedule->settings->ctrlmode=="timer") {
-                        // if (count($schedule->runtime->periods)) { // comment this out to allow clearing timer on unallowed times (13-16 for nordpool)
+                        if (count($schedule->runtime->periods)) { // comment this out to allow clearing timer on unallowed times (13-16 for nordpool)
                             $s1 = time_offset($schedule->runtime->periods[$active_period]->start[1],-$timeOffset);
                             $e1 = time_offset($schedule->runtime->periods[$active_period]->end[1],-$timeOffset);
                             $device_class[$device_type]->timer($device,$s1,$e1,$s2,$e2);
-                        // }
+                        }
                     }
                     else if ($schedule->settings->ctrlmode=="on") $device_class[$device_type]->on($device);
                     else if ($schedule->settings->ctrlmode=="off") $device_class[$device_type]->off($device);
