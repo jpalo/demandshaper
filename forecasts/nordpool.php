@@ -47,7 +47,7 @@ function get_forecast_nordpool($redis,$params)
         "DK1"=>array("currency"=>"DKK","vat"=>"25"),
         "DK2"=>array("currency"=>"DKK","vat"=>"25"),
         "EE"=>array("currency"=>"EUR","vat"=>"20"),
-        "FI"=>array("currency"=>"EUR","vat"=>"10"),
+        "FI"=>array("currency"=>"EUR","vat"=>"25.5"),
         "LT"=>array("currency"=>"EUR","vat"=>"21"),
         "NO1"=>array("currency"=>"NOK","vat"=>"25"),
         "NO2"=>array("currency"=>"NOK","vat"=>"25"),
@@ -73,6 +73,9 @@ function get_forecast_nordpool($redis,$params)
         if($params->area === "FI") {
             if ($result = http_request("GET","https://api.spot-hinta.fi/TodayAndDayForward?region=FI&HomeAssistant=false",array())) {            
                 if(strpos($result, "{") === 0) {
+                    // remove all spaces and line breaks from $result
+                    $result = preg_replace('/\s+/', '', $result);                                  
+                    
                     $redis->set($key,$result);
                     $redis->expire($key,3600);
                 }
@@ -87,6 +90,9 @@ function get_forecast_nordpool($redis,$params)
             );
             if ($result = http_request("GET","http://datafeed.expektra.se/datafeed.svc/spotprice",$req_params)) {            
                 if(strpos($result, "{") === 0) {
+                    // remove all spaces and line breaks from $result
+                    $result = preg_replace('/\s+/', '', $result);
+
                     $redis->set($key,$result);
                     $redis->expire($key,3600+1800);
                 }

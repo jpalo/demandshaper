@@ -43,7 +43,7 @@
 <script>
 
 var schedule_period = 3;
-var schedule_end = 17;
+var schedule_end = 8;
 $("#period").val(schedule_period);
 $("#end").val(schedule_end);
 
