@@ -104,7 +104,7 @@ function get_forecast_nordpool($redis,$params)
     }
 
     $result = json_decode($result);
-    print json_encode($result);
+    
     // 2. Create associative array out of original forecast
     //    format: timestamp:value
     $timevalues = array();
