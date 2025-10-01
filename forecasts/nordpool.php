@@ -68,10 +68,12 @@ function get_forecast_nordpool($redis,$params)
     //    important that it is 3600+1800 instead of 3600 as Expektra doesn't return history values, so 
     //    if query for prices is made on the second half of the hour, the price for that second half 
     //    is not returned
+    
     $key = "demandshaper:nordpool:".$params->area;
     if (!$result = $redis->get($key)) {
         if($params->area === "FI") {
-            if ($result = http_request("GET","https://api.spot-hinta.fi/TodayAndDayForward?region=FI&HomeAssistant=false&priceResolution=60",array())) {            
+            
+            if ($result = http_request("GET","https://api.spot-hinta.fi/TodayAndDayForward?region=FI&priceResolution=60&HomeAssistant=false",array())) {
                 if(strpos($result, "{") === 0) {
                     // remove all spaces and line breaks from $result
                     $result = preg_replace('/\s+/', '', $result);                                  
@@ -90,24 +92,25 @@ function get_forecast_nordpool($redis,$params)
             );
             if ($result = http_request("GET","http://datafeed.expektra.se/datafeed.svc/spotprice",$req_params)) {            
                 if(strpos($result, "{") === 0) {
+                    
                     // remove all spaces and line breaks from $result
                     $result = preg_replace('/\s+/', '', $result);
 
                     $redis->set($key,$result);
                     $redis->expire($key,3600+1800);
                 }
-            }
+            }            
         }
     }
 
     $result = json_decode($result);
-    
+    print json_encode($result);
     // 2. Create associative array out of original forecast
     //    format: timestamp:value
     $timevalues = array();
-    if ($result!=null && isset($result->data)) {
+    if ($result!=null && is_array($result)) {
         if($params->area === "FI") {
-            foreach ($result->data as $row) {
+            foreach ($result as $row) {
                 $date = new DateTime($row->DateTime);
                 $date->setTimezone($timezone);
                 $timestamp = $date->getTimestamp();
