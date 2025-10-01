@@ -71,7 +71,7 @@ function get_forecast_nordpool($redis,$params)
     $key = "demandshaper:nordpool:".$params->area;
     if (!$result = $redis->get($key)) {
         if($params->area === "FI") {
-            if ($result = http_request("GET","https://api.spot-hinta.fi/TodayAndDayForward?region=FI&HomeAssistant=false",array())) {            
+            if ($result = http_request("GET","https://api.spot-hinta.fi/TodayAndDayForward?region=FI&HomeAssistant=false&priceResolution=60",array())) {            
                 if(strpos($result, "{") === 0) {
                     // remove all spaces and line breaks from $result
                     $result = preg_replace('/\s+/', '', $result);                                  
